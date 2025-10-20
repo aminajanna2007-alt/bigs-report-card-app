@@ -1,5 +1,0 @@
-streamlit
-reportlab
-pillow
-pdf2image
-pandas
