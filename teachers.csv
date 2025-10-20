@@ -1,0 +1,2 @@
+username,password,is_admin
+amina,pbkdf2$200000$41a4a8a6dcdf785f6cdd1c38b02e0bc1$2a9984eab7eaa960142ca0c1c08c9622f2435c3c96d6f22c16d513ddfa726a5b,TRUE
