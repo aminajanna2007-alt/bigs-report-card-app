@@ -1,2 +1,3 @@
 username,password,is_admin
-amina,pbkdf2$200000$877d644a697c2d207a160be6ece00d5d$ac4f5e7d5a8ead46328c88853f52bab6359bfbaf6a7153f46c4aa917cedcda0b,TRUE
+amina,1234,TRUE
+
