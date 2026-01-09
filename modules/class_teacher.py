@@ -288,7 +288,8 @@ def app():
                         # We use BG image now, but keep header fallback if needed in adapter? 
                         # Adapter handles fallback to frame if bg_img is None.
                         
-                        gs = pd.read_sql("SELECT * FROM grade_scales", conn)
+                        # Renaming for PDF Generator compatibility (Min/Max/Grade)
+                        gs = pd.read_sql("SELECT min_pct as Min, max_pct as Max, grade_label as Grade FROM grade_scales", conn)
                         grade_scales = gs.to_dict('records')
                         
                         zip_buffer = io.BytesIO()
@@ -301,34 +302,35 @@ def app():
                                 adm = stud['admission_no'] # used for filename
                                 par_sign = stud['parent_signature_path']
                                 
-                                # Marks (with Max Marks)
+                                # Marks (with Max Marks) - Left Join on Configured Subjects
                                 q_marks = """
-                                    SELECT sub.id, sub.name, m.te_score, m.ce_score, m.remarks
-                                    FROM marks m
-                                    JOIN subjects sub ON m.subject_id = sub.id
-                                    WHERE m.student_id = ?
+                                    SELECT sub.id, sub.name, 
+                                           m.te_score, m.ce_score, m.remarks,
+                                           COALESCE(sc.te_max_marks, 100) as t_max,
+                                           COALESCE(sc.ce_max_marks, 0) as c_max
+                                    FROM subjects sub
+                                    JOIN subject_grade_config sc ON sub.id = sc.subject_id
+                                    LEFT JOIN marks m ON sub.id = m.subject_id AND m.student_id = ?
+                                    WHERE sc.grade_id = ?
+                                    ORDER BY sub.name
                                 """
-                                m_rows = pd.read_sql(q_marks, conn, params=(sid,)).to_dict('records')
+                                m_rows = pd.read_sql(q_marks, conn, params=(sid, grade_id)).to_dict('records')
                                 
-                                # Augment with Limits
                                 marks_data = []
                                 for r in m_rows:
-                                    # limit lookup
-                                    limit = conn.execute("SELECT te_max_marks, ce_max_marks FROM subject_grade_config WHERE subject_id=? AND grade_id=?", (r['id'], grade_id)).fetchone()
-                                    if limit:
-                                        t_max, c_max = limit
-                                    else:
-                                        # fallback
-                                        def_l = conn.execute("SELECT te_max_marks, ce_max_marks FROM subjects WHERE id=?", (r['id'],)).fetchone()
-                                        t_max, c_max = def_l if def_l else (100, 0)
+                                    # Handle Nulls
+                                    te = r['te_score'] if pd.notna(r['te_score']) else 0
+                                    ce = r['ce_score'] if pd.notna(r['ce_score']) else 0
+                                    t_max = r['t_max']
+                                    c_max = r['c_max']
+                                    rem = r['remarks'] if pd.notna(r['remarks']) else ""
                                     
                                     marks_data.append({
-                                        "name": r['name'],
-                                        "te_score": r['te_score'],
-                                        "ce_score": r['ce_score'],
-                                        "te_max_marks": t_max,
-                                        "ce_max_marks": c_max,
-                                        "remarks": r['remarks']
+                                        "Subject": r['name'], # Changed from 'name' to 'Subject' for consistency
+                                        "TE": te,
+                                        "CE": ce,
+                                        "Full_Marks": t_max + c_max,
+                                        "Remarks": rem
                                     })
                                 
                                 # Skills

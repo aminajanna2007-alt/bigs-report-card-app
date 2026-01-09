@@ -73,10 +73,10 @@ def app():
             grade_scales = []
             for _, r in gs_df.iterrows():
                 grade_scales.append({
-                    'min': r['min_pct'],
-                    'max': r['max_pct'],
-                    'grade': r['grade_label'],
-                    'comment': "" # No comment rule in grade_scaling yet, strictly score mapping
+                    'Min': r['min_pct'],
+                    'Max': r['max_pct'],
+                    'Grade': r['grade_label'],
+                    'comment': "" 
                 })
             
             # Signatures
@@ -101,22 +101,37 @@ def app():
                     s_name = s_info['name']
                     
                     # Fetch Marks
+                    # Fetch Marks (Left Join on Configured Subjects)
+                    # Use subject_grade_config as the definitive list of subjects for this grade
                     q_m = """
-                    SELECT s.name as subject, m.te_score, m.ce_score, s.te_max_marks, s.ce_max_marks
-                    FROM marks m
-                    JOIN subjects s ON m.subject_id = s.id
-                    WHERE m.student_id = ?
+                    SELECT s.name as subject, 
+                           m.te_score, m.ce_score, m.remarks,
+                           COALESCE(sc.te_max_marks, 100) as te_max, 
+                           COALESCE(sc.ce_max_marks, 0) as ce_max
+                    FROM subjects s
+                    JOIN subject_grade_config sc ON s.id = sc.subject_id
+                    LEFT JOIN marks m ON s.id = m.subject_id AND m.student_id = ?
+                    WHERE sc.grade_id = ?
+                    ORDER BY s.name
                     """
-                    marks_data = pd.read_sql(q_m, conn, params=(sid,))
+                    # We need grade_id for the query. sel_grade_id is available.
+                    marks_data = pd.read_sql(q_m, conn, params=(sid, sel_grade_id))
                     
                     subjects_scores = []
                     for _, row in marks_data.iterrows():
-                        total_score = row['te_score'] + row['ce_score']
-                        total_max = row['te_max_marks'] + row['ce_max_marks']
+                        # Handle Nulls
+                        te = row['te_score'] if pd.notna(row['te_score']) else 0
+                        ce = row['ce_score'] if pd.notna(row['ce_score']) else 0
+                        t_max = row['te_max']
+                        c_max = row['ce_max']
+                        rem = row['remarks'] if pd.notna(row['remarks']) else ""
+                        
                         subjects_scores.append({
-                            'subject': row['subject'],
-                            'score': total_score,
-                            'total': total_max
+                            'Subject': row['subject'], # PDF Gen expects Subject
+                            'TE': te,
+                            'CE': ce,
+                            'Full_Marks': t_max + c_max,
+                            'Remarks': rem
                         })
                     
                     # Skills (Dummy for now as logic not fully detailed, or fetch from student_skills)
