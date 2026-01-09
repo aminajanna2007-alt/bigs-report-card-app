@@ -101,18 +101,22 @@ def app():
                     s_name = s_info['name']
                     
                     # Fetch Marks
-                    # Fetch Marks (Left Join on Configured Subjects)
+                    # Fetch Marks (Left Join on Configured Subjects - MATCH BY NAME to handle ID Drift)
                     # Use subject_grade_config as the definitive list of subjects for this grade
                     q_m = """
-                    SELECT s.name as subject, 
-                           m.te_score, m.ce_score, m.remarks,
+                    SELECT sub.name as subject, 
+                           m_linked.te_score, m_linked.ce_score, m_linked.remarks,
                            COALESCE(sc.te_max_marks, 100) as te_max, 
                            COALESCE(sc.ce_max_marks, 0) as ce_max
-                    FROM subjects s
-                    JOIN subject_grade_config sc ON s.id = sc.subject_id
-                    LEFT JOIN marks m ON s.id = m.subject_id AND m.student_id = ?
+                    FROM subjects sub
+                    JOIN subject_grade_config sc ON sub.id = sc.subject_id
+                    LEFT JOIN (
+                        SELECT m.te_score, m.ce_score, m.remarks, s_actual.name as subj_name, m.student_id
+                        FROM marks m
+                        JOIN subjects s_actual ON m.subject_id = s_actual.id
+                    ) m_linked ON sub.name = m_linked.subj_name AND m_linked.student_id = ?
                     WHERE sc.grade_id = ?
-                    ORDER BY s.name
+                    ORDER BY sub.name
                     """
                     # We need grade_id for the query. sel_grade_id is available.
                     marks_data = pd.read_sql(q_m, conn, params=(sid, sel_grade_id))

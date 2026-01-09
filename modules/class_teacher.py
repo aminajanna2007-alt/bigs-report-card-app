@@ -302,15 +302,19 @@ def app():
                                 adm = stud['admission_no'] # used for filename
                                 par_sign = stud['parent_signature_path']
                                 
-                                # Marks (with Max Marks) - Left Join on Configured Subjects
+                                # Marks (with Max Marks) - Left Join on Configured Subjects (MATCH BY NAME to fix ID Mismatch)
                                 q_marks = """
-                                    SELECT sub.id, sub.name, 
-                                           m.te_score, m.ce_score, m.remarks,
+                                    SELECT sub.name as subject, 
+                                           m_linked.te_score, m_linked.ce_score, m_linked.remarks,
                                            COALESCE(sc.te_max_marks, 100) as t_max,
                                            COALESCE(sc.ce_max_marks, 0) as c_max
                                     FROM subjects sub
                                     JOIN subject_grade_config sc ON sub.id = sc.subject_id
-                                    LEFT JOIN marks m ON sub.id = m.subject_id AND m.student_id = ?
+                                    LEFT JOIN (
+                                        SELECT m.te_score, m.ce_score, m.remarks, s_actual.name as subj_name, m.student_id
+                                        FROM marks m
+                                        JOIN subjects s_actual ON m.subject_id = s_actual.id
+                                    ) m_linked ON sub.name = m_linked.subj_name AND m_linked.student_id = ?
                                     WHERE sc.grade_id = ?
                                     ORDER BY sub.name
                                 """
@@ -326,7 +330,7 @@ def app():
                                     rem = r['remarks'] if pd.notna(r['remarks']) else ""
                                     
                                     marks_data.append({
-                                        "Subject": r['name'], # Changed from 'name' to 'Subject' for consistency
+                                        "Subject": r['subject'],
                                         "TE": te,
                                         "CE": ce,
                                         "Full_Marks": t_max + c_max,
