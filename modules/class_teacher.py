@@ -105,23 +105,41 @@ def app():
                     
                     if st.button("Save Marks", key=f"save_marks_{subj_id}"):
                         conn = database.get_connection()
-                        for idx, row in edited_df.iterrows():
-                            sid = row['student_id']
-                            te = row.get('te_score')
-                            ce = row.get('ce_score')
-                            rem = row.get('Remarks')
+                        try:
+                            # DEBUG: Verify what is being saved
+                            # st.write(f"Saving Marks for Subject ID: {subj_id} (Grade: {grade_id})")
+                            debug_saved_count = 0
                             
-                            conn.execute("""
-                                INSERT INTO marks (student_id, subject_id, te_score, ce_score, remarks)
-                                VALUES (?, ?, ?, ?, ?)
-                                ON CONFLICT(student_id, subject_id) DO UPDATE SET
-                                    te_score=excluded.te_score,
-                                    ce_score=excluded.ce_score,
-                                    remarks=excluded.remarks
-                            """, (sid, subj_id, te if pd.notna(te) else None, ce if pd.notna(ce) else None, rem if pd.notna(rem) else ""))
-                        conn.commit()
-                        conn.close()
-                        st.success(f"Marks saved for {sel_subj_name}!")
+                            for idx, row in edited_df.iterrows():
+                                sid = row['student_id']
+                                te = row.get('te_score')
+                                ce = row.get('ce_score')
+                                rem = row.get('Remarks')
+                                
+                                # Diagnostic print
+                                # st.write(f"Processing Student {sid}: TE={te}, CE={ce}, Rem={rem}")
+                                
+                                val_te = te if pd.notna(te) else None
+                                val_ce = ce if pd.notna(ce) else None
+                                val_rem = rem if pd.notna(rem) else ""
+                                
+                                conn.execute("""
+                                    INSERT INTO marks (student_id, subject_id, te_score, ce_score, remarks)
+                                    VALUES (?, ?, ?, ?, ?)
+                                    ON CONFLICT(student_id, subject_id) DO UPDATE SET
+                                        te_score=excluded.te_score,
+                                        ce_score=excluded.ce_score,
+                                        remarks=excluded.remarks
+                                """, (sid, subj_id, val_te, val_ce, val_rem))
+                                debug_saved_count += 1
+                                
+                            conn.commit()
+                            st.success(f"Marks saved for {sel_subj_name}! ({debug_saved_count} records)")
+                            st.cache_data.clear()
+                        except Exception as e:
+                            st.error(f"Error saving marks: {e}")
+                        finally:
+                            conn.close()
                 else:
                     st.warning("No students in this grade.")
                 conn.close()
@@ -314,7 +332,7 @@ def app():
                                         SELECT m.te_score, m.ce_score, m.remarks, s_actual.name as subj_name, m.student_id
                                         FROM marks m
                                         JOIN subjects s_actual ON m.subject_id = s_actual.id
-                                    ) m_linked ON sub.name = m_linked.subj_name AND m_linked.student_id = ?
+                                    ) m_linked ON UPPER(TRIM(sub.name)) = UPPER(TRIM(m_linked.subj_name)) AND m_linked.student_id = ?
                                     WHERE sc.grade_id = ?
                                     ORDER BY sub.name
                                 """

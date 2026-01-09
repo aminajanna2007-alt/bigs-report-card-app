@@ -114,7 +114,7 @@ def app():
                         SELECT m.te_score, m.ce_score, m.remarks, s_actual.name as subj_name, m.student_id
                         FROM marks m
                         JOIN subjects s_actual ON m.subject_id = s_actual.id
-                    ) m_linked ON sub.name = m_linked.subj_name AND m_linked.student_id = ?
+                    ) m_linked ON UPPER(TRIM(sub.name)) = UPPER(TRIM(m_linked.subj_name)) AND m_linked.student_id = ?
                     WHERE sc.grade_id = ?
                     ORDER BY sub.name
                     """
