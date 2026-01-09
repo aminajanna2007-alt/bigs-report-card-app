@@ -230,11 +230,23 @@ def create_report_pdf_bytes_v2(
     total_scored = 0.0
     total_full = 0.0
     for r in academic_rows:
-        te = safe_float(r.get("TE", 0))
-        ce = safe_float(r.get("CE", 0))
+        # Only include in total if marks are present (not None)
+        # We assume if TE is None, the subject hasn't been graded yet.
+        te_val = r.get("TE")
+        ce_val = r.get("CE")
+        
+        if te_val is None and ce_val is None:
+            continue
+            
+        # Treat None as 0 for calculation if one is present but not other? 
+        # Or just treat as 0. Let's safe_float it for the sum if at least one is present.
+        te = safe_float(te_val, 0)
+        ce = safe_float(ce_val, 0)
         full = safe_float(r.get("Full_Marks", 100))
+        
         total_scored += (te + ce)
         total_full += full
+        
     overall_pct = (total_scored / total_full * 100) if total_full else 0.0
     status_text = "PASSED" if overall_pct >= 40 else "FAILED"
 
@@ -270,20 +282,41 @@ def create_report_pdf_bytes_v2(
 
     for r in academic_rows:
         subj = r.get("Subject", "")
-        te = int(safe_float(r.get("TE", 0)))
-        ce = int(safe_float(r.get("CE", 0)))
-        full = int(safe_float(r.get("Full_Marks", 100)))
-        scored = te + ce
-        pct = (scored / full * 100) if full else 0.0
-        grade_txt = lookup_grade(pct, grade_scale_rows)
+        te_val = r.get("TE")
+        ce_val = r.get("CE")
+        
+        # Check for missing marks (not entered)
+        if te_val is None and ce_val is None:
+            # Display placeholders
+            te_str = "-"
+            ce_str = "-"
+            scored_str = "-"
+            pct_str = "-"
+            grade_txt = "-"
+            full_str = str(int(safe_float(r.get("Full_Marks", 100)))) # Still show max marks? Or "-"
+            full_str = "-" # Let's hide full marks too to indicate "Not evaluated"
+        else:
+            te = int(safe_float(te_val, 0))
+            ce = int(safe_float(ce_val, 0))
+            full = int(safe_float(r.get("Full_Marks", 100)))
+            scored = te + ce
+            pct = (scored / full * 100) if full else 0.0
+            grade_txt = lookup_grade(pct, grade_scale_rows)
+            
+            te_str = str(te)
+            ce_str = str(ce)
+            scored_str = str(scored)
+            full_str = str(full)
+            pct_str = f"{pct:.1f}%"
+
         subj_table_data.append(
             [
                 subj,
-                str(te),
-                str(ce),
-                str(scored),
-                str(full),
-                f"{pct:.1f}%",
+                te_str,
+                ce_str,
+                scored_str,
+                full_str,
+                pct_str,
                 grade_txt,
                 r.get("Remarks", ""),
             ]

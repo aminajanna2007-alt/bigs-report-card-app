@@ -318,9 +318,9 @@ def app():
                                 
                                 marks_data = []
                                 for r in m_rows:
-                                    # Handle Nulls
-                                    te = r['te_score'] if pd.notna(r['te_score']) else 0
-                                    ce = r['ce_score'] if pd.notna(r['ce_score']) else 0
+                                    # Handle Nulls - Pass None if data is missing so PDF gen can skip calculation
+                                    te = r['te_score'] if pd.notna(r['te_score']) else None
+                                    ce = r['ce_score'] if pd.notna(r['ce_score']) else None
                                     t_max = r['t_max']
                                     c_max = r['c_max']
                                     rem = r['remarks'] if pd.notna(r['remarks']) else ""
