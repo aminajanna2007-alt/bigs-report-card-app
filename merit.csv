@@ -1,0 +1,64 @@
+Subject,Total,Min,Max,Grade,Comment
+ENGLISH,100,91,100,A1,Outstanding
+ENGLISH,100,81,90,A2,Excellent
+ENGLISH,100,71,80,B1,Very Good
+ENGLISH,100,61,70,B2,Good
+ENGLISH,100,51,60,C1,Fair
+ENGLISH,100,41,50,C2,Average
+ENGLISH,100,33,40,D,Needs Improvement
+ENGLISH,100,21,32,E1,Unsatisfactory
+ENGLISH,100,0,20,E2,Unsatisfactory
+HINDI,100,91,100,A1,Outstanding
+HINDI,100,81,90,A2,Excellent
+HINDI,100,71,80,B1,Very Good
+HINDI,100,61,70,B2,Good
+HINDI,100,51,60,C1,Fair
+HINDI,100,41,50,C2,Average
+HINDI,100,33,40,D,Needs Improvement
+HINDI,100,21,32,E1,Unsatisfactory
+HINDI,100,0,20,E2,Unsatisfactory
+ISLAMIC,100,91,100,A1,Outstanding
+ISLAMIC,100,81,90,A2,Excellent
+ISLAMIC,100,71,80,B1,Very Good
+ISLAMIC,100,61,70,B2,Good
+ISLAMIC,100,51,60,C1,Fair
+ISLAMIC,100,41,50,C2,Average
+ISLAMIC,100,33,40,D,Needs Improvement
+ISLAMIC,100,21,32,E1,Unsatisfactory
+ISLAMIC,100,0,20,E2,Unsatisfactory
+MATHS,100,91,100,A1,Outstanding
+MATHS,100,81,90,A2,Excellent
+MATHS,100,71,80,B1,Very Good
+MATHS,100,61,70,B2,Good
+MATHS,100,51,60,C1,Fair
+MATHS,100,41,50,C2,Average
+MATHS,100,33,40,D,Needs Improvement
+MATHS,100,21,32,E1,Unsatisfactory
+MATHS,100,0,20,E2,Unsatisfactory
+SOCIAL,100,91,100,A1,Outstanding
+SOCIAL,100,81,90,A2,Excellent
+SOCIAL,100,71,80,B1,Very Good
+SOCIAL,100,61,70,B2,Good
+SOCIAL,100,51,60,C1,Fair
+SOCIAL,100,41,50,C2,Average
+SOCIAL,100,33,40,D,Needs Improvement
+SOCIAL,100,21,32,E1,Unsatisfactory
+SOCIAL,100,0,20,E2,Unsatisfactory
+SCIENCE,100,91,100,A1,Outstanding
+SCIENCE,100,81,90,A2,Excellent
+SCIENCE,100,71,80,B1,Very Good
+SCIENCE,100,61,70,B2,Good
+SCIENCE,100,51,60,C1,Fair
+SCIENCE,100,41,50,C2,Average
+SCIENCE,100,33,40,D,Needs Improvement
+SCIENCE,100,21,32,E1,Unsatisfactory
+SCIENCE,100,0,20,E2,Unsatisfactory
+IT,100,91,100,A1,Outstanding
+IT,100,81,90,A2,Excellent
+IT,100,71,80,B1,Very Good
+IT,100,61,70,B2,Good
+IT,100,51,60,C1,Fair
+IT,100,41,50,C2,Average
+IT,100,33,40,D,Needs Improvement
+IT,100,21,32,E1,Unsatisfactory
+IT,100,0,20,E2,Unsatisfactory
