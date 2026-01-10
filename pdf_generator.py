@@ -80,7 +80,11 @@ def write_csv(path: Path, fieldnames: List[str], rows: List[dict]):
 
 def safe_float(x, default=0.0):
     try:
-        return float(x)
+        val = float(x)
+        # Check for NaN (NaN != NaN)
+        if val != val:
+            return default
+        return val
     except Exception:
         return default
 
