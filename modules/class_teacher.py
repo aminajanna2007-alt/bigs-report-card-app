@@ -105,41 +105,23 @@ def app():
                     
                     if st.button("Save Marks", key=f"save_marks_{subj_id}"):
                         conn = database.get_connection()
-                        try:
-                            # DEBUG: Verify what is being saved
-                            # st.write(f"Saving Marks for Subject ID: {subj_id} (Grade: {grade_id})")
-                            debug_saved_count = 0
+                        for idx, row in edited_df.iterrows():
+                            sid = row['student_id']
+                            te = row.get('te_score')
+                            ce = row.get('ce_score')
+                            rem = row.get('Remarks')
                             
-                            for idx, row in edited_df.iterrows():
-                                sid = row['student_id']
-                                te = row.get('te_score')
-                                ce = row.get('ce_score')
-                                rem = row.get('Remarks')
-                                
-                                # Diagnostic print
-                                # st.write(f"Processing Student {sid}: TE={te}, CE={ce}, Rem={rem}")
-                                
-                                val_te = te if pd.notna(te) else None
-                                val_ce = ce if pd.notna(ce) else None
-                                val_rem = rem if pd.notna(rem) else ""
-                                
-                                conn.execute("""
-                                    INSERT INTO marks (student_id, subject_id, te_score, ce_score, remarks)
-                                    VALUES (?, ?, ?, ?, ?)
-                                    ON CONFLICT(student_id, subject_id) DO UPDATE SET
-                                        te_score=excluded.te_score,
-                                        ce_score=excluded.ce_score,
-                                        remarks=excluded.remarks
-                                """, (sid, subj_id, val_te, val_ce, val_rem))
-                                debug_saved_count += 1
-                                
-                            conn.commit()
-                            st.success(f"Marks saved for {sel_subj_name}! ({debug_saved_count} records)")
-                            st.cache_data.clear()
-                        except Exception as e:
-                            st.error(f"Error saving marks: {e}")
-                        finally:
-                            conn.close()
+                            conn.execute("""
+                                INSERT INTO marks (student_id, subject_id, te_score, ce_score, remarks)
+                                VALUES (?, ?, ?, ?, ?)
+                                ON CONFLICT(student_id, subject_id) DO UPDATE SET
+                                    te_score=excluded.te_score,
+                                    ce_score=excluded.ce_score,
+                                    remarks=excluded.remarks
+                            """, (sid, int(subj_id), te if pd.notna(te) else None, ce if pd.notna(ce) else None, rem if pd.notna(rem) else ""))
+                        conn.commit()
+                        conn.close()
+                        st.success(f"Marks saved for {sel_subj_name}!")
                 else:
                     st.warning("No students in this grade.")
                 conn.close()
@@ -306,9 +288,21 @@ def app():
                         # We use BG image now, but keep header fallback if needed in adapter? 
                         # Adapter handles fallback to frame if bg_img is None.
                         
-                        # Renaming for PDF Generator compatibility (Min/Max/Grade)
-                        gs = pd.read_sql("SELECT min_pct as Min, max_pct as Max, grade_label as Grade FROM grade_scales", conn)
-                        grade_scales = gs.to_dict('records')
+                        # Fallback to Subject Default Limits handled later in loop if needed, but we fetched specific above.
+                        
+                        # Fetch Grade Scales (Key Mismatch Fix + Grade Logic)
+                        # keys expected by pdf_generator: Min, Max, Grade
+                        # Strategy: Try fetching specific rules for this grade. If None, fetch Global.
+                        q_gs_spec = 'SELECT min_pct as "Min", max_pct as "Max", grade_label as "Grade" FROM grade_scales WHERE grade_id = ?'
+                        gs_spec = pd.read_sql(q_gs_spec, conn, params=(grade_id,))
+                        
+                        if not gs_spec.empty:
+                            grade_scales = gs_spec.to_dict('records')
+                        else:
+                            # Global
+                            q_gs_glob = 'SELECT min_pct as "Min", max_pct as "Max", grade_label as "Grade" FROM grade_scales WHERE grade_id IS NULL'
+                            gs_glob = pd.read_sql(q_gs_glob, conn)
+                            grade_scales = gs_glob.to_dict('records')
                         
                         zip_buffer = io.BytesIO()
                         has_files = False
@@ -320,39 +314,34 @@ def app():
                                 adm = stud['admission_no'] # used for filename
                                 par_sign = stud['parent_signature_path']
                                 
-                                # Marks (with Max Marks) - Left Join on Configured Subjects (MATCH BY NAME to fix ID Mismatch)
+                                # Marks (with Max Marks)
                                 q_marks = """
-                                    SELECT sub.name as subject, 
-                                           m_linked.te_score, m_linked.ce_score, m_linked.remarks,
-                                           COALESCE(sc.te_max_marks, 100) as t_max,
-                                           COALESCE(sc.ce_max_marks, 0) as c_max
-                                    FROM subjects sub
-                                    JOIN subject_grade_config sc ON sub.id = sc.subject_id
-                                    LEFT JOIN (
-                                        SELECT m.te_score, m.ce_score, m.remarks, s_actual.name as subj_name, m.student_id
-                                        FROM marks m
-                                        JOIN subjects s_actual ON m.subject_id = s_actual.id
-                                    ) m_linked ON UPPER(TRIM(sub.name)) = UPPER(TRIM(m_linked.subj_name)) AND m_linked.student_id = ?
-                                    WHERE sc.grade_id = ?
-                                    ORDER BY sub.name
+                                    SELECT sub.id, sub.name, m.te_score, m.ce_score, m.remarks
+                                    FROM marks m
+                                    JOIN subjects sub ON m.subject_id = sub.id
+                                    WHERE m.student_id = ?
                                 """
-                                m_rows = pd.read_sql(q_marks, conn, params=(sid, grade_id)).to_dict('records')
+                                m_rows = pd.read_sql(q_marks, conn, params=(sid,)).to_dict('records')
                                 
+                                # Augment with Limits
                                 marks_data = []
                                 for r in m_rows:
-                                    # Handle Nulls - Pass None if data is missing so PDF gen can skip calculation
-                                    te = r['te_score'] if pd.notna(r['te_score']) else None
-                                    ce = r['ce_score'] if pd.notna(r['ce_score']) else None
-                                    t_max = r['t_max']
-                                    c_max = r['c_max']
-                                    rem = r['remarks'] if pd.notna(r['remarks']) else ""
+                                    # limit lookup
+                                    limit = conn.execute("SELECT te_max_marks, ce_max_marks FROM subject_grade_config WHERE subject_id=? AND grade_id=?", (r['id'], grade_id)).fetchone()
+                                    if limit:
+                                        t_max, c_max = limit
+                                    else:
+                                        # fallback
+                                        def_l = conn.execute("SELECT te_max_marks, ce_max_marks FROM subjects WHERE id=?", (r['id'],)).fetchone()
+                                        t_max, c_max = def_l if def_l else (100, 0)
                                     
                                     marks_data.append({
-                                        "Subject": r['subject'],
-                                        "TE": te,
-                                        "CE": ce,
-                                        "Full_Marks": t_max + c_max,
-                                        "Remarks": rem
+                                        "name": r['name'],
+                                        "te_score": r['te_score'],
+                                        "ce_score": r['ce_score'],
+                                        "te_max_marks": t_max,
+                                        "ce_max_marks": c_max,
+                                        "remarks": r['remarks']
                                     })
                                 
                                 # Skills
