@@ -107,12 +107,12 @@ def app():
             # Additional: Display Class Teacher Assignments Table
             st.markdown("#### Class Teacher Assignments Summary")
             q_ct = """
-            SELECT ua.username, u.full_name, GROUP_CONCAT(g.name, ', ') as assigned_grades
+            SELECT ua.username, u.full_name, STRING_AGG(g.name, ', ') as assigned_grades
             FROM user_assignments ua
             JOIN users u ON ua.username = u.username
             JOIN grades g ON ua.grade_id = g.id
             WHERE u.role = 'Class Teacher' AND ua.subject_id = -1
-            GROUP BY ua.username
+            GROUP BY ua.username, u.full_name
             """
             ct_summary = pd.read_sql(q_ct, conn.raw)
             if not ct_summary.empty:
