@@ -1,8 +1,13 @@
 import psycopg2
 import os
 import streamlit as st
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
 
-DB_URL = st.secrets.get("SUPABASE_URL", os.environ.get("SUPABASE_URL", ""))
+DB_URL = st.secrets.get("SUPABASE_URL", os.environ.get("SUPABASE_URL", os.environ.get("DB_URL", "")))
 
 
 class PgCursorWrapper:
