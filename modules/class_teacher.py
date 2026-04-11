@@ -15,9 +15,9 @@ def app():
     SELECT distinct g.id, g.name 
     FROM user_assignments ua
     JOIN grades g ON ua.grade_id = g.id
-    WHERE ua.username = ?
+    WHERE ua.username = %s
     """
-    grades = pd.read_sql(q, conn, params=(user,))
+    grades = pd.read_sql(q, conn.raw, params=(user,))
     conn.close()
     
     if grades.empty:
@@ -53,10 +53,10 @@ def app():
             SELECT s.id, s.name 
             FROM user_assignments ua
             JOIN subjects s ON ua.subject_id = s.id
-            WHERE ua.username = ? AND ua.grade_id = ?
+            WHERE ua.username = %s AND ua.grade_id = %s
             ORDER BY s.name
             """
-            subjs_df = pd.read_sql(q_as, conn, params=(user, grade_id))
+            subjs_df = pd.read_sql(q_as, conn.raw, params=(user, grade_id))
             
         conn.close()
         
@@ -73,23 +73,23 @@ def app():
                 
                 # Fetch Max Marks (Grade Specific > Subject Default)
                 conn = database.get_connection()
-                lim_res = conn.execute("SELECT te_max_marks, ce_max_marks FROM subject_grade_config WHERE subject_id=? AND grade_id=?", (subj_id, grade_id)).fetchone()
+                lim_res = conn.execute("SELECT te_max_marks, ce_max_marks FROM subject_grade_config WHERE subject_id=%s AND grade_id=%s", (subj_id, grade_id)).fetchone()
                 if lim_res:
                     te_max, ce_max = lim_res
                 else:
-                    s_def = conn.execute("SELECT te_max_marks, ce_max_marks FROM subjects WHERE id=?", (subj_id,)).fetchone()
+                    s_def = conn.execute("SELECT te_max_marks, ce_max_marks FROM subjects WHERE id=%s", (subj_id,)).fetchone()
                     te_max, ce_max = s_def if s_def else (100.0, 0.0)
                 
                 st.write(f"Entering Marks for **{sel_subj_name}** in **{sel_grade_name}** (Max TE: {te_max}, Max CE: {ce_max})")
                 
                 # Fetch Students + Marks
-                q_st = "SELECT id, name, admission_no FROM students WHERE grade_id=? ORDER BY name"
-                students_df = pd.read_sql(q_st, conn, params=(grade_id,))
+                q_st = "SELECT id, name, admission_no FROM students WHERE grade_id=%s ORDER BY name"
+                students_df = pd.read_sql(q_st, conn.raw, params=(grade_id,))
                 
                 if not students_df.empty:
                     # Fetch Existing Marks
-                    q_m = "SELECT student_id, te_score, ce_score, remarks FROM marks WHERE subject_id=?"
-                    marks_df = pd.read_sql(q_m, conn, params=(subj_id,))
+                    q_m = "SELECT student_id, te_score, ce_score, remarks FROM marks WHERE subject_id=%s"
+                    marks_df = pd.read_sql(q_m, conn.raw, params=(subj_id,))
                     
                     # Merge
                     merged = pd.merge(students_df, marks_df, left_on='id', right_on='student_id', how='left')
@@ -122,7 +122,7 @@ def app():
                             
                             conn.execute("""
                                 INSERT INTO marks (student_id, subject_id, te_score, ce_score, remarks)
-                                VALUES (?, ?, ?, ?, ?)
+                                VALUES (%s, %s, %s, %s, %s)
                                 ON CONFLICT(student_id, subject_id) DO UPDATE SET
                                     te_score=excluded.te_score,
                                     ce_score=excluded.ce_score,
@@ -145,7 +145,7 @@ def app():
         skill_cols = ["Remembering", "Understanding", "Applying", "Regularity & Punctuality", "Neatness & Orderliness"]
         
         conn = database.get_connection()
-        students = pd.read_sql("SELECT id, name, admission_no FROM students WHERE grade_id=? ORDER BY name", conn, params=(grade_id,))
+        students = pd.read_sql("SELECT id, name, admission_no FROM students WHERE grade_id=%s ORDER BY name", conn, params=(grade_id,))
         
         if students.empty:
             st.info("No students in this class.")
@@ -153,9 +153,9 @@ def app():
         else:
             # Fetch Existing Data
             # Skills
-            skills_df = pd.read_sql("SELECT student_id, skill_name, score FROM student_skills WHERE student_id IN (SELECT id FROM students WHERE grade_id=?)", conn, params=(grade_id,))
+            skills_df = pd.read_sql("SELECT student_id, skill_name, score FROM student_skills WHERE student_id IN (SELECT id FROM students WHERE grade_id=%s)", conn, params=(grade_id,))
             # Remarks
-            rem_df = pd.read_sql("SELECT student_id, remark FROM student_remarks WHERE student_id IN (SELECT id FROM students WHERE grade_id=?)", conn, params=(grade_id,))
+            rem_df = pd.read_sql("SELECT student_id, remark FROM student_remarks WHERE student_id IN (SELECT id FROM students WHERE grade_id=%s)", conn, params=(grade_id,))
             conn.close()
             
             # Build Editor Data
@@ -212,12 +212,12 @@ def app():
                         for sc in skill_cols:
                             val = row.get(sc)
                             if pd.notna(val):
-                                conn.execute("INSERT OR REPLACE INTO student_skills (student_id, skill_name, score) VALUES (?, ?, ?)", (sid, sc, int(val)))
+                                conn.execute("INSERT INTO student_skills (student_id, skill_name, score) VALUES (%s, %s, %s) ON CONFLICT (student_id, skill_name) DO UPDATE SET score=EXCLUDED.score", (sid, sc, int(val)))
                         
                         # Save Remark
                         rem = row.get("Class Teacher's Remarks")
                         # Always save remark even if empty string (to clear if deleted) -> merge logic handles non-null
-                        conn.execute("INSERT OR REPLACE INTO student_remarks (student_id, remark) VALUES (?, ?)", (sid, rem if rem else ""))
+                        conn.execute("INSERT INTO student_remarks (student_id, remark) VALUES (%s, %s) ON CONFLICT (student_id) DO UPDATE SET remark=EXCLUDED.remark", (sid, rem if rem else ""))
                             
                     conn.commit()
                     st.success("Skills & Remarks saved successfully!")
@@ -235,10 +235,10 @@ def app():
         fmt = st.multiselect("Output Format", ["PDF", "JPG"], default=["PDF"])
         
         conn = database.get_connection()
-        s_df = pd.read_sql("SELECT id, name, admission_no, parent_signature_path FROM students WHERE grade_id=? ORDER BY name", conn, params=(grade_id,))
+        s_df = pd.read_sql("SELECT id, name, admission_no, parent_signature_path FROM students WHERE grade_id=%s ORDER BY name", conn, params=(grade_id,))
         
         # Grade specific assets
-        g_info = conn.execute("SELECT class_teacher_sign_path FROM grades WHERE id=?", (grade_id,)).fetchone()
+        g_info = conn.execute("SELECT class_teacher_sign_path FROM grades WHERE id=%s", (grade_id,)).fetchone()
         ct_sign_path = g_info[0] if g_info else None
         
         # Background
@@ -247,7 +247,7 @@ def app():
             SELECT rb.filename 
             FROM grade_backgrounds gb
             JOIN report_backgrounds rb ON gb.background_id = rb.id
-            WHERE gb.grade_id = ?
+            WHERE gb.grade_id = %s
         """, (grade_id,)).fetchone()
         bg_img = bg_row[0] if bg_row and os.path.exists(bg_row[0]) else None
 
@@ -279,10 +279,10 @@ def app():
                         conn = database.get_connection()
                         # Global signatures/images
                         p_sign = "principal_sign.png" if os.path.exists("principal_sign.png") else None
-                        # We use BG image now, but keep header fallback if needed in adapter? 
+                        # We use BG image now, but keep header fallback if needed in adapter%s 
                         # Adapter handles fallback to frame if bg_img is None.
                         
-                        gs = pd.read_sql("SELECT * FROM grade_scales", conn)
+                        gs = pd.read_sql("SELECT * FROM grade_scales", conn.raw)
                         grade_scales = gs.to_dict('records')
                         
                         zip_buffer = io.BytesIO()
@@ -300,20 +300,20 @@ def app():
                                     SELECT sub.id, sub.name, m.te_score, m.ce_score, m.remarks
                                     FROM marks m
                                     JOIN subjects sub ON m.subject_id = sub.id
-                                    WHERE m.student_id = ?
+                                    WHERE m.student_id = %s
                                 """
-                                m_rows = pd.read_sql(q_marks, conn, params=(sid,)).to_dict('records')
+                                m_rows = pd.read_sql(q_marks, conn.raw, params=(sid,)).to_dict('records')
                                 
                                 # Augment with Limits
                                 marks_data = []
                                 for r in m_rows:
                                     # limit lookup
-                                    limit = conn.execute("SELECT te_max_marks, ce_max_marks FROM subject_grade_config WHERE subject_id=? AND grade_id=?", (r['id'], grade_id)).fetchone()
+                                    limit = conn.execute("SELECT te_max_marks, ce_max_marks FROM subject_grade_config WHERE subject_id=%s AND grade_id=%s", (r['id'], grade_id)).fetchone()
                                     if limit:
                                         t_max, c_max = limit
                                     else:
                                         # fallback
-                                        def_l = conn.execute("SELECT te_max_marks, ce_max_marks FROM subjects WHERE id=?", (r['id'],)).fetchone()
+                                        def_l = conn.execute("SELECT te_max_marks, ce_max_marks FROM subjects WHERE id=%s", (r['id'],)).fetchone()
                                         t_max, c_max = def_l if def_l else (100, 0)
                                     
                                     marks_data.append({
@@ -326,11 +326,11 @@ def app():
                                     })
                                 
                                 # Skills
-                                q_skills = "SELECT skill_name, score FROM student_skills WHERE student_id=?"
-                                skills_data = pd.read_sql(q_skills, conn, params=(sid,)).to_dict('records')
+                                q_skills = "SELECT skill_name, score FROM student_skills WHERE student_id=%s"
+                                skills_data = pd.read_sql(q_skills, conn.raw, params=(sid,)).to_dict('records')
                                 
                                 # Teacher Remark
-                                rem_rec = conn.execute("SELECT remark FROM student_remarks WHERE student_id=?", (sid,)).fetchone()
+                                rem_rec = conn.execute("SELECT remark FROM student_remarks WHERE student_id=%s", (sid,)).fetchone()
                                 remark = rem_rec[0] if rem_rec else ""
                                 
                                 pdf_bytes = pdf_generator.create_report_card_bytes(

@@ -3,3 +3,4 @@ reportlab
 pillow
 pdf2image
 pandas
+psycopg2-binary

@@ -124,10 +124,10 @@ def login():
             c = conn.cursor()
             # Fetch theme too
             try:
-                c.execute("SELECT username, password_hash, full_name, role, dashboard_page, theme FROM users WHERE username=?", (username,))
+                c.execute("SELECT username, password_hash, full_name, role, dashboard_page, theme FROM users WHERE username=%s", (username,))
             except sqlite3.OperationalError:
                  # Fallback if column not yet queried in this session/connection context (though init_db should handle it)
-                 c.execute("SELECT username, password_hash, full_name, role, dashboard_page, 'Light' FROM users WHERE username=?", (username,))
+                 c.execute("SELECT username, password_hash, full_name, role, dashboard_page, 'Light' FROM users WHERE username=%s", (username,))
             
             user = c.fetchone()
             conn.close()
@@ -160,7 +160,7 @@ def main():
     c.execute("SELECT count(*) FROM users")
     if c.fetchone()[0] == 0:
         pwhash = auth.make_pbkdf2_hash("admin123")
-        c.execute("INSERT INTO users (username, password_hash, full_name, role, dashboard_page, theme) VALUES (?, ?, ?, ?, ?, ?)", 
+        c.execute("INSERT INTO users (username, password_hash, full_name, role, dashboard_page, theme) VALUES (%s, %s, %s, %s, %s, %s)", 
                   ("admin", pwhash, "System Admin", "Admin", "Admin Dashboard", "Light"))
         conn.commit()
     conn.close()
@@ -188,7 +188,7 @@ def main():
         if selected_theme != current_theme:
             # Update DB and Session
             conn = database.get_connection()
-            conn.execute("UPDATE users SET theme=? WHERE username=?", (selected_theme, user['username']))
+            conn.execute("UPDATE users SET theme=%s WHERE username=%s", (selected_theme, user['username']))
             conn.commit()
             conn.close()
             
@@ -203,7 +203,7 @@ def main():
                 if auth.verify_password(user.get("password_hash") or "", curr_pass_input):
                     new_ph = auth.make_pbkdf2_hash(new_pass_input)
                     conn = database.get_connection()
-                    conn.execute("UPDATE users SET password_hash=? WHERE username=?", (new_ph, user['username']))
+                    conn.execute("UPDATE users SET password_hash=%s WHERE username=%s", (new_ph, user['username']))
                     conn.commit()
                     conn.close()
                     st.success("Password Updated!")

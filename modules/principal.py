@@ -27,8 +27,8 @@ def app():
         if sel_grade_name:
             gid = grades[grades['name'] == sel_grade_name]['id'].values[0]
             # Fetch students
-            q_s = "SELECT id, name, admission_no, grade_id, parent_signature_path FROM students WHERE grade_id=? ORDER BY name"
-            students_df = pd.read_sql(q_s, conn, params=(gid,))
+            q_s = "SELECT id, name, admission_no, grade_id, parent_signature_path FROM students WHERE grade_id=%s ORDER BY name"
+            students_df = pd.read_sql(q_s, conn.raw, params=(gid,))
             
             sel_students = st.multiselect("Select Students (Leave empty for All in Grade)", students_df['name'].tolist(), default=students_df['name'].tolist())
             
@@ -52,14 +52,14 @@ def app():
             JOIN grades g ON s.grade_id = g.id
             ORDER BY g.name, s.name
             """
-            target_students = pd.read_sql(q_all, conn).to_dict('records')
+            target_students = pd.read_sql(q_all, conn.raw).to_dict('records')
     
     # Fetch Global Data once
     p_sign = "principal_sign.png" if os.path.exists("principal_sign.png") else None
     top_img = "top.jpg" if os.path.exists("top.jpg") else None
     bottom_img = "bottom.jpg" if os.path.exists("bottom.jpg") else None
     
-    gs = pd.read_sql("SELECT * FROM grade_scales", conn)
+    gs = pd.read_sql("SELECT * FROM grade_scales", conn.raw)
     grade_scales = gs.to_dict('records')
     
     # Fetch all grade signatures to a dict {grade_id: path}
@@ -104,16 +104,16 @@ def app():
                     SELECT sub.name, m.te_score, m.ce_score, sub.te_max_marks, sub.ce_max_marks, m.remarks
                     FROM marks m
                     JOIN subjects sub ON m.subject_id = sub.id
-                    WHERE m.student_id = ?
+                    WHERE m.student_id = %s
                 """
-                marks_data = pd.read_sql(q_marks, conn, params=(sid,)).to_dict('records')
+                marks_data = pd.read_sql(q_marks, conn.raw, params=(sid,)).to_dict('records')
                 
                 # Skills
-                q_skills = "SELECT skill_name, score FROM student_skills WHERE student_id=?"
-                skills_data = pd.read_sql(q_skills, conn, params=(sid,)).to_dict('records')
+                q_skills = "SELECT skill_name, score FROM student_skills WHERE student_id=%s"
+                skills_data = pd.read_sql(q_skills, conn.raw, params=(sid,)).to_dict('records')
                 
                 # Remarks
-                rem_rec = conn.execute("SELECT remark FROM student_remarks WHERE student_id=?", (sid,)).fetchone()
+                rem_rec = conn.execute("SELECT remark FROM student_remarks WHERE student_id=%s", (sid,)).fetchone()
                 remark = rem_rec[0] if rem_rec else ""
                 
                 pdf_bytes = pdf_generator.create_report_card_bytes(
@@ -133,7 +133,7 @@ def app():
                 
                 if pdf_bytes:
                     clean_name = f"{gname}/{sname}_{adm}".replace(" ", "_")
-                    # Use hierarchy in zip?
+                    # Use hierarchy in zip%s
                     # report_data/grade_x/reports...
                     # simple filename: Grade_Name.pdf
                     fname_base = f"{gname}_{sname}".replace(" ", "_")

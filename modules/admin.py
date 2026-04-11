@@ -52,7 +52,7 @@ def app():
                     conn = database.get_connection()
                     c = conn.cursor()
                     try:
-                        c.execute("INSERT INTO users (username, password_hash, full_name, role, dashboard_page, theme) VALUES (?, ?, ?, ?, ?, ?)",
+                        c.execute("INSERT INTO users (username, password_hash, full_name, role, dashboard_page, theme) VALUES (%s, %s, %s, %s, %s, %s)",
                                   (gen_user, phash, full_name, u_role, u_dash, 'Light'))
                         
                         # Handle CT Assignment
@@ -60,7 +60,7 @@ def app():
                             gids = grades_list[grades_list['name'].isin(ct_grades)]['id'].tolist()
                             for gid in gids:
                                 try:
-                                    c.execute("INSERT INTO user_assignments (username, grade_id, subject_id) VALUES (?, ?, ?)", (gen_user, int(gid), -1))
+                                    c.execute("INSERT INTO user_assignments (username, grade_id, subject_id) VALUES (%s, %s, %s)", (gen_user, int(gid), -1))
                                 except:
                                     pass
                         
@@ -88,7 +88,7 @@ def app():
                             p = auth.generate_password(fname, lname)
                             ph = auth.make_pbkdf2_hash(p)
                             try:
-                                c.execute("INSERT INTO users (username, password_hash, full_name, role, dashboard_page) VALUES (?, ?, ?, ?, ?)",
+                                c.execute("INSERT INTO users (username, password_hash, full_name, role, dashboard_page) VALUES (%s, %s, %s, %s, %s)",
                                           (u, ph, f"{fname} {lname}", role, f"{role} Dashboard"))
                                 created.append((u, p))
                             except:
@@ -114,7 +114,7 @@ def app():
             WHERE u.role = 'Class Teacher' AND ua.subject_id = -1
             GROUP BY ua.username
             """
-            ct_summary = pd.read_sql(q_ct, conn)
+            ct_summary = pd.read_sql(q_ct, conn.raw)
             if not ct_summary.empty:
                 st.dataframe(ct_summary, hide_index=True)
             else:
@@ -127,7 +127,7 @@ def app():
             sel_u = st.selectbox("Select User to Edit", users_df['username'].tolist(), index=None)
             if sel_u:
                 conn = database.get_connection()
-                curr = conn.execute("SELECT full_name, role, dashboard_page FROM users WHERE username=?", (sel_u,)).fetchone()
+                curr = conn.execute("SELECT full_name, role, dashboard_page FROM users WHERE username=%s", (sel_u,)).fetchone()
                 
                 # Fetch existing CT assignments
                 curr_ct_grades = []
@@ -136,7 +136,7 @@ def app():
                     SELECT g.name 
                     FROM user_assignments ua
                     JOIN grades g ON ua.grade_id = g.id
-                    WHERE ua.username = ? AND ua.subject_id = -1
+                    WHERE ua.username = %s AND ua.subject_id = -1
                     """
                     curr_ct_grades = [r[0] for r in conn.execute(q_g, (sel_u,)).fetchall()]
                 
@@ -176,14 +176,14 @@ def app():
                                 # 1. Update basic info
                                 if new_pass:
                                     ph = auth.make_pbkdf2_hash(new_pass)
-                                    conn.execute("UPDATE users SET full_name=?, role=?, dashboard_page=?, password_hash=? WHERE username=?", (new_fullname, new_role, new_dash, ph, sel_u))
+                                    conn.execute("UPDATE users SET full_name=%s, role=%s, dashboard_page=%s, password_hash=%s WHERE username=%s", (new_fullname, new_role, new_dash, ph, sel_u))
                                 else:
-                                    conn.execute("UPDATE users SET full_name=?, role=?, dashboard_page=? WHERE username=?", (new_fullname, new_role, new_dash, sel_u))
+                                    conn.execute("UPDATE users SET full_name=%s, role=%s, dashboard_page=%s WHERE username=%s", (new_fullname, new_role, new_dash, sel_u))
                                 
                                 # 2. Update Username
                                 if new_username != sel_u:
-                                    conn.execute("UPDATE users SET username=? WHERE username=?", (new_username, sel_u))
-                                    conn.execute("UPDATE user_assignments SET username=? WHERE username=?", (new_username, sel_u))
+                                    conn.execute("UPDATE users SET username=%s WHERE username=%s", (new_username, sel_u))
+                                    conn.execute("UPDATE user_assignments SET username=%s WHERE username=%s", (new_username, sel_u))
                                     sel_u = new_username # Update for next steps
                                 
                                 # 3. Handle CT Assignment (Sync)
@@ -191,7 +191,7 @@ def app():
                                     # Get IDs involved
                                     # Current IDs in DB (reload to be safe or use what we had if username unchanged)
                                     # Safest is to querying DB for current status of target user
-                                    curr_ids = [r[0] for r in conn.execute("SELECT grade_id FROM user_assignments WHERE username=? AND subject_id=-1", (sel_u,)).fetchall()]
+                                    curr_ids = [r[0] for r in conn.execute("SELECT grade_id FROM user_assignments WHERE username=%s AND subject_id=-1", (sel_u,)).fetchall()]
                                     
                                     new_ids = []
                                     if new_ct_grades:
@@ -202,10 +202,10 @@ def app():
                                     to_remove = set(curr_ids) - set(new_ids)
                                     
                                     for mid in to_remove:
-                                        conn.execute("DELETE FROM user_assignments WHERE username=? AND grade_id=? AND subject_id=-1", (sel_u, mid))
+                                        conn.execute("DELETE FROM user_assignments WHERE username=%s AND grade_id=%s AND subject_id=-1", (sel_u, mid))
                                         
                                     for Aid in to_add:
-                                        conn.execute("INSERT INTO user_assignments (username, grade_id, subject_id) VALUES (?, ?, ?)", (sel_u, Aid, -1))
+                                        conn.execute("INSERT INTO user_assignments (username, grade_id, subject_id) VALUES (%s, %s, %s)", (sel_u, Aid, -1))
                                 
                                 conn.commit()
                                 st.success("Updated!")
@@ -216,7 +216,7 @@ def app():
                             
                         if d2.form_submit_button("DELETE USER", type="primary"):
                             conn = database.get_connection()
-                            conn.execute("DELETE FROM users WHERE username=?", (sel_u,))
+                            conn.execute("DELETE FROM users WHERE username=%s", (sel_u,))
                             conn.commit()
                             conn.close()
                             st.warning(f"Deleted {sel_u}")
@@ -241,7 +241,7 @@ def app():
                         conn = database.get_connection()
                         try:
                             # Default max marks to 100/0 if not using config, but config is preferred
-                            conn.execute("INSERT INTO subjects (name, te_max_marks, ce_max_marks) VALUES (?, ?, ?)", (s_name.upper(), 100, 0))
+                            conn.execute("INSERT INTO subjects (name, te_max_marks, ce_max_marks) VALUES (%s, %s, %s)", (s_name.upper(), 100, 0))
                             conn.commit()
                             st.success(f"Added {s_name}")
                         except:
@@ -257,7 +257,7 @@ def app():
             if st.button("Delete Subjects", type="primary"):
                 if del_s_ids:
                     ids_to_del = subjs[subjs['name'].isin(del_s_ids)]['id'].tolist()
-                    placeholders = ','.join('?' for _ in ids_to_del)
+                    placeholders = ','.join('%s' for _ in ids_to_del)
                     conn.execute(f"DELETE FROM subjects WHERE id IN ({placeholders})", tuple(ids_to_del))
                     conn.commit()
                     st.success("Deleted Subjects")
@@ -272,7 +272,7 @@ def app():
                 if g_name:
                     conn = database.get_connection()
                     try:
-                        conn.execute("INSERT INTO grades (name) VALUES (?)", (g_name,))
+                        conn.execute("INSERT INTO grades (name) VALUES (%s)", (g_name,))
                         conn.commit()
                         st.success(f"Added {g_name}")
                     except:
@@ -280,7 +280,7 @@ def app():
                     conn.close()
             
             conn = database.get_connection()
-            grades = pd.read_sql("SELECT * FROM grades", conn)
+            grades = pd.read_sql("SELECT * FROM grades", conn.raw)
             st.dataframe(grades, hide_index=True)
             
             # Delete
@@ -288,7 +288,7 @@ def app():
             if st.button("Delete Grades", type="primary"):
                 if del_g_ids:
                     ids_to_del = grades[grades['name'].isin(del_g_ids)]['id'].tolist()
-                    placeholders = ','.join('?' for _ in ids_to_del)
+                    placeholders = ','.join('%s' for _ in ids_to_del)
                     conn.execute(f"DELETE FROM grades WHERE id IN ({placeholders})", tuple(ids_to_del))
                     conn.commit()
                     st.success("Deleted Grades")
@@ -319,7 +319,7 @@ def app():
                     gid = g_df[g_df['name']==sel_g]['id'].values[0]
                     conn = database.get_connection()
                     try:
-                        conn.execute("INSERT OR REPLACE INTO subject_grade_config (subject_id, grade_id, te_max_marks, ce_max_marks) VALUES (?, ?, ?, ?)", (int(sid), int(gid), te_m, ce_m))
+                        conn.execute("INSERT INTO subject_grade_config (subject_id, grade_id, te_max_marks, ce_max_marks) VALUES (%s, %s, %s, %s) ON CONFLICT (subject_id, grade_id) DO UPDATE SET te_max_marks=EXCLUDED.te_max_marks, ce_max_marks=EXCLUDED.ce_max_marks", (int(sid), int(gid), te_m, ce_m))
                         conn.commit()
                         st.success(f"Updated {sel_s} in {sel_g}")
                     except Exception as e:
@@ -335,7 +335,7 @@ def app():
             JOIN grades g ON c.grade_id=g.id
             ORDER BY g.name, s.name
         """
-        conf_df = pd.read_sql(q_conf, conn)
+        conf_df = pd.read_sql(q_conf, conn.raw)
         st.dataframe(conf_df, hide_index=True)
         
         # Delete Subject Limits
@@ -349,7 +349,7 @@ def app():
                 JOIN subjects s ON c.subject_id=s.id 
                 JOIN grades g ON c.grade_id=g.id
             """
-            full_conf = pd.read_sql(q_full, conn)
+            full_conf = pd.read_sql(q_full, conn.raw)
             full_conf['label'] = full_conf['Subject'] + " - " + full_conf['Grade']
             
             sel_del_lim = st.selectbox("Select Limit to Delete", full_conf['label'].tolist(), index=None)
@@ -358,7 +358,7 @@ def app():
                     to_del_row = full_conf[full_conf['label'] == sel_del_lim].iloc[0]
                     dsid = int(to_del_row['subject_id'])
                     dgid = int(to_del_row['grade_id'])
-                    conn.execute("DELETE FROM subject_grade_config WHERE subject_id=? AND grade_id=?", (dsid, dgid))
+                    conn.execute("DELETE FROM subject_grade_config WHERE subject_id=%s AND grade_id=%s", (dsid, dgid))
                     conn.commit()
                     st.success("Deleted!")
                     st.rerun()
@@ -377,7 +377,7 @@ def app():
             gl = c1.text_input("Label (e.g. A1)")
             mn = c2.number_input("Min %", 0.0, 100.0, 91.0)
             mx = c3.number_input("Max %", 0.0, 100.0, 100.0)
-            # Grade Select (Optional? User said 'include grade selection', implies it varies)
+            # Grade Select (Optional%s User said 'include grade selection', implies it varies)
             gr_for_scale = c4.selectbox("Grade (Optional - Global if empty)", ["Global"] + g_df['name'].tolist() if not g_df.empty else ["Global"])
             
             if st.form_submit_button("Add Grade Scale Rule"):
@@ -387,7 +387,7 @@ def app():
                     if gr_for_scale != "Global":
                         gid_val = int(g_df[g_df['name']==gr_for_scale]['id'].values[0])
                         
-                    conn.execute("INSERT INTO grade_scales (grade_label, min_pct, max_pct, grade_id) VALUES (?, ?, ?, ?)", (gl, mn, mx, gid_val))
+                    conn.execute("INSERT INTO grade_scales (grade_label, min_pct, max_pct, grade_id) VALUES (%s, %s, %s, %s)", (gl, mn, mx, gid_val))
                     conn.commit()
                     st.success("Added Rule")
                 except:
@@ -413,7 +413,7 @@ def app():
                      if sel_del_GS:
                          del_id = int(gs_full[gs_full['disp'] == sel_del_GS]['id'].values[0])
                          conn = database.get_connection()
-                         conn.execute("DELETE FROM grade_scales WHERE id=?", (del_id,))
+                         conn.execute("DELETE FROM grade_scales WHERE id=%s", (del_id,))
                          conn.commit()
                          conn.close()
                          st.success("Deleted Rule")
@@ -446,11 +446,11 @@ def app():
                         gid = g_opts[g_opts['name']==g_sel]['id'].values[0]
                         conn = database.get_connection()
                         try:
-                            conn.execute("INSERT INTO students (name, admission_no, grade_id) VALUES (?, ?, ?)", (st_name, st_adm, int(gid)))
+                            conn.execute("INSERT INTO students (name, admission_no, grade_id) VALUES (%s, %s, %s)", (st_name, st_adm, int(gid)))
                             conn.commit()
                             st.success(f"Student {st_name} added to {g_sel}")
                         except:
-                            st.error("Error (Duplicate Adm No?)")
+                            st.error("Error (Duplicate Adm No%s)")
                         conn.close()
         
         with c_edit:
@@ -465,13 +465,13 @@ def app():
                      sel_st_edit = st.selectbox("Select Student to Edit", st_display)
                      
                      if sel_st_edit:
-                         # Extract original name for lookup or just use index?
+                         # Extract original name for lookup or just use index%s
                          # Better to look up by ID if we mapped it, but here we can just find row
                          sel_idx = st_display.index(sel_st_edit)
                          sid_edit = all_st.iloc[sel_idx]['id']
                          
                          conn = database.get_connection()
-                         curr_st = conn.execute("SELECT name, admission_no, grade_id FROM students WHERE id=?", (sid_edit,)).fetchone()
+                         curr_st = conn.execute("SELECT name, admission_no, grade_id FROM students WHERE id=%s", (sid_edit,)).fetchone()
                          conn.close()
                          
                          if curr_st:
@@ -487,7 +487,7 @@ def app():
                              if st.button("Update Student Details"):
                                  gid_new = g_opts[g_opts['name']==new_g]['id'].values[0]
                                  conn = database.get_connection()
-                                 conn.execute("UPDATE students SET name=?, admission_no=?, grade_id=? WHERE id=?", (new_nm, new_ad, gid_new, sid_edit))
+                                 conn.execute("UPDATE students SET name=%s, admission_no=%s, grade_id=%s WHERE id=%s", (new_nm, new_ad, gid_new, sid_edit))
                                  conn.commit()
                                  conn.close()
                                  st.success("Updated!")
@@ -510,7 +510,7 @@ def app():
                     gid = g_map.get(gn)
                     if nm and gid:
                         try:
-                            conn.execute("INSERT INTO students (name, admission_no, grade_id) VALUES (?, ?, ?)", (nm, adm, gid))
+                            conn.execute("INSERT INTO students (name, admission_no, grade_id) VALUES (%s, %s, %s)", (nm, adm, gid))
                             added += 1
                         except:
                             pass
@@ -534,7 +534,7 @@ def app():
             if st.button("Delete Selected", type="primary"):
                 if to_del_ids:
                     conn = database.get_connection()
-                    placeholders = ','.join('?' for _ in to_del_ids)
+                    placeholders = ','.join('%s' for _ in to_del_ids)
                     conn.execute(f"DELETE FROM students WHERE id IN ({placeholders})", tuple(to_del_ids))
                     conn.commit()
                     conn.close()
@@ -549,7 +549,7 @@ def app():
              g_sel_m = st.selectbox("Select Grade", g_opts['name'].tolist(), key="admin_marks_g")
              if g_sel_m:
                  gid_m = g_opts[g_opts['name']==g_sel_m]['id'].values[0]
-                 sts = pd.read_sql("SELECT id, name FROM students WHERE grade_id=?", conn, params=(gid_m,))
+                 sts = pd.read_sql("SELECT id, name FROM students WHERE grade_id=%s", conn, params=(gid_m,))
                  
                  st_sel_m = st.selectbox("Select Student", sts['name'].tolist() if not sts.empty else [], key="admin_marks_s")
                  if st_sel_m:
@@ -562,7 +562,7 @@ def app():
                          sub_id_m = subjs[subjs['name']==sub_sel_m]['id'].values[0]
                          
                          # Fetch current
-                         curr_marks = conn.execute("SELECT te_score, ce_score, remarks FROM marks WHERE student_id=? AND subject_id=?", (sid_m, sub_id_m)).fetchone()
+                         curr_marks = conn.execute("SELECT te_score, ce_score, remarks FROM marks WHERE student_id=%s AND subject_id=%s", (sid_m, sub_id_m)).fetchone()
                          te_curr, ce_curr, rem_curr = curr_marks if curr_marks else (0.0, 0.0, "")
                          
                          c_m1, c_m2, c_m3 = st.columns(3)
@@ -574,7 +574,7 @@ def app():
                              try:
                                  conn.execute("""
                                     INSERT INTO marks (student_id, subject_id, te_score, ce_score, remarks)
-                                    VALUES (?, ?, ?, ?, ?)
+                                    VALUES (%s, %s, %s, %s, %s)
                                     ON CONFLICT(student_id, subject_id) DO UPDATE SET
                                     te_score=excluded.te_score,
                                     ce_score=excluded.ce_score,
@@ -618,9 +618,9 @@ def app():
                     
                     for gid in g_ids:
                         for sid in s_ids:
-                            exists = c.execute("SELECT 1 FROM user_assignments WHERE username=? AND grade_id=? AND subject_id=?", (sel_u_assign, gid, sid)).fetchone()
+                            exists = c.execute("SELECT 1 FROM user_assignments WHERE username=%s AND grade_id=%s AND subject_id=%s", (sel_u_assign, gid, sid)).fetchone()
                             if not exists:
-                                c.execute("INSERT INTO user_assignments (username, grade_id, subject_id) VALUES (?, ?, ?)", (sel_u_assign, gid, sid))
+                                c.execute("INSERT INTO user_assignments (username, grade_id, subject_id) VALUES (%s, %s, %s)", (sel_u_assign, gid, sid))
                                 count += 1
                     conn.commit()
                     conn.close()
@@ -634,15 +634,15 @@ def app():
                 FROM user_assignments ua
                 JOIN grades g ON ua.grade_id = g.id
                 JOIN subjects s ON ua.subject_id = s.id
-                WHERE ua.username = ?
+                WHERE ua.username = %s
                 """
                 if sel_u_assign:
-                    data = pd.read_sql(q, conn, params=(sel_u_assign,))
+                    data = pd.read_sql(q, conn.raw, params=(sel_u_assign,))
                     st.dataframe(data, hide_index=True)
                     to_del = st.selectbox("Select ID to Remove", data['id'].tolist() if not data.empty else [])
                     if to_del:
                         if st.button("Remove Assignment"):
-                            conn.execute("DELETE FROM user_assignments WHERE id=?", (to_del,))
+                            conn.execute("DELETE FROM user_assignments WHERE id=%s", (to_del,))
                             conn.commit()
                             st.rerun()
                 conn.close()
@@ -668,7 +668,7 @@ def app():
             st.markdown("**Class Teacher Signatures**")
             conn = database.get_connection()
             grades_df = pd.read_sql("SELECT id, name, class_teacher_sign_path FROM grades", conn)
-            # Fetch assignments if we want to show?
+            # Fetch assignments if we want to show%s
             conn.close()
             
             sel_g_sig = st.selectbox("Select Grade for Signature", grades_df['name'].tolist())
@@ -682,7 +682,7 @@ def app():
                         f.write(ct_sig.getbuffer())
                     
                     conn = database.get_connection()
-                    conn.execute("UPDATE grades SET class_teacher_sign_path=? WHERE name=?", (fname, sel_g_sig))
+                    conn.execute("UPDATE grades SET class_teacher_sign_path=%s WHERE name=%s", (fname, sel_g_sig))
                     conn.commit()
                     conn.close()
                     st.success(f"Saved for {sel_g_sig}")
@@ -702,12 +702,12 @@ def app():
                     
                     conn = database.get_connection()
                     c = conn.cursor()
-                    found = c.execute("SELECT id FROM students WHERE admission_no=?", (st_for_sig,)).fetchone()
+                    found = c.execute("SELECT id FROM students WHERE admission_no=%s", (st_for_sig,)).fetchone()
                     if not found:
-                        found = c.execute("SELECT id FROM students WHERE name=?", (st_for_sig,)).fetchone()
+                        found = c.execute("SELECT id FROM students WHERE name=%s", (st_for_sig,)).fetchone()
                     
                     if found:
-                        c.execute("UPDATE students SET parent_signature_path=? WHERE id=?", (fname, found[0]))
+                        c.execute("UPDATE students SET parent_signature_path=%s WHERE id=%s", (fname, found[0]))
                         conn.commit()
                         st.success("Linked!")
                     else:
@@ -727,7 +727,7 @@ def app():
                         f.write(bg_file.getbuffer())
                     
                     conn = database.get_connection()
-                    conn.execute("INSERT INTO report_backgrounds (filename) VALUES (?)", (fname,))
+                    conn.execute("INSERT INTO report_backgrounds (filename) VALUES (%s)", (fname,))
                     conn.commit()
                     conn.close()
                     st.success("Background Uploaded")
@@ -748,7 +748,7 @@ def app():
                     
                     conn = database.get_connection()
                     for gid in g_ids:
-                        conn.execute("INSERT OR REPLACE INTO grade_backgrounds (grade_id, background_id) VALUES (?, ?)", (int(gid), bg_id))
+                        conn.execute("INSERT INTO grade_backgrounds (grade_id, background_id) VALUES (%s, %s) ON CONFLICT (grade_id) DO UPDATE SET background_id=EXCLUDED.background_id", (int(gid), bg_id))
                     conn.commit()
                     conn.close()
                     st.success("Assigned!")
@@ -762,6 +762,6 @@ def app():
                 JOIN report_backgrounds b ON gb.background_id=b.id
                 ORDER BY g.name
             """
-            bg_assigns = pd.read_sql(q_bg, conn)
+            bg_assigns = pd.read_sql(q_bg, conn.raw)
             conn.close()
             st.dataframe(bg_assigns, hide_index=True)

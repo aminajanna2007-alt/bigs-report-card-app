@@ -1,18 +1,63 @@
-import sqlite3
+import psycopg2
 import os
+import streamlit as st
 
-DB_NAME = "school_data.db"
+DB_URL = st.secrets.get("SUPABASE_URL", os.environ.get("SUPABASE_URL", ""))
+
+
+class PgCursorWrapper:
+    def __init__(self, cursor):
+        self._cursor = cursor
+
+    def execute(self, query, params=None):
+        if params is not None:
+             self._cursor.execute(query, params)
+        else:
+             self._cursor.execute(query)
+        return self
+
+    def fetchone(self):
+        return self._cursor.fetchone()
+
+    def fetchall(self):
+        return self._cursor.fetchall()
+        
+    def __getattr__(self, name):
+         return getattr(self._cursor, name)
+
+class PgConnectionWrapper:
+    def __init__(self, dsn):
+        self.conn = psycopg2.connect(dsn)
+
+    def cursor(self):
+        return PgCursorWrapper(self.conn.cursor())
+
+    def execute(self, query, params=None):
+        cur = self.cursor()
+        cur.execute(query, params)
+        return cur
+
+    def commit(self):
+        self.conn.commit()
+        
+    def rollback(self):
+        self.conn.rollback()
+
+    def close(self):
+        self.conn.close()
+        
+    # Some pandas operations or external libraries might need the raw connection
+    @property
+    def raw(self):
+        return self.conn
 
 def get_connection():
-    return sqlite3.connect(DB_NAME, check_same_thread=False)
+    return PgConnectionWrapper(DB_URL)
 
 def init_db():
     conn = get_connection()
     c = conn.cursor()
     
-    # Enable foreign keys
-    c.execute("PRAGMA foreign_keys = ON;")
-
     # Users Table
     c.execute('''CREATE TABLE IF NOT EXISTS users (
         username TEXT PRIMARY KEY,
@@ -24,48 +69,39 @@ def init_db():
         theme TEXT DEFAULT 'Light'
     )''')
     
-    # Auto-migration for existing tables
     try:
         c.execute("ALTER TABLE users ADD COLUMN theme TEXT DEFAULT 'Light'")
-    except sqlite3.OperationalError:
-        pass # Column likely exists
+    except psycopg2.Error:
+        conn.rollback()
 
-    # Default Admin (if not exists)
-    # We will insert this in the main app startup if needed, but let's ensure table exists first.
-
-    # Grades / Classes (e.g. "10State", "5A")
     c.execute('''CREATE TABLE IF NOT EXISTS grades (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id SERIAL PRIMARY KEY,
         name TEXT UNIQUE NOT NULL
     )''')
 
-    # Subjects
     c.execute('''CREATE TABLE IF NOT EXISTS subjects (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id SERIAL PRIMARY KEY,
         name TEXT UNIQUE NOT NULL,
         te_max_marks REAL DEFAULT 100,
         ce_max_marks REAL DEFAULT 0
     )''')
     
-    # Grade Scale (e.g. "A1", "B1") - Global or per logic? User asked for "Create Grade Scale".
-    # We'll store ranges.
     c.execute('''CREATE TABLE IF NOT EXISTS grade_scales (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id SERIAL PRIMARY KEY,
         grade_label TEXT NOT NULL,
         min_pct REAL NOT NULL,
         max_pct REAL NOT NULL,
+        grade_id INTEGER REFERENCES grades(id),
         UNIQUE(grade_label, min_pct, max_pct)
     )''')
 
-    # Skill Scores (1, 2, 3, 4) & Remarks
     c.execute('''CREATE TABLE IF NOT EXISTS skill_scores (
         score INTEGER PRIMARY KEY,
         remark TEXT NOT NULL
     )''')
 
-    # Students
     c.execute('''CREATE TABLE IF NOT EXISTS students (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id SERIAL PRIMARY KEY,
         admission_no TEXT UNIQUE,
         name TEXT NOT NULL,
         grade_id INTEGER,
@@ -73,14 +109,8 @@ def init_db():
         FOREIGN KEY (grade_id) REFERENCES grades(id) ON DELETE SET NULL
     )''')
 
-    # Enrollments (if we need history, but current requirement implies simple current grade. 
-    # For now, student.grade_id is sufficient for current enrollment.)
-
-    # Subject Assignments (Which user teaches which subject for which grade?)
-    # "Assign subjects to users", "Assign Grades to users"
-    # A user (teacher) can be assigned multiple subjects and multiple grades.
     c.execute('''CREATE TABLE IF NOT EXISTS user_assignments (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id SERIAL PRIMARY KEY,
         username TEXT NOT NULL,
         grade_id INTEGER,
         subject_id INTEGER,
@@ -88,24 +118,9 @@ def init_db():
         FOREIGN KEY (grade_id) REFERENCES grades(id) ON DELETE CASCADE,
         FOREIGN KEY (subject_id) REFERENCES subjects(id) ON DELETE CASCADE
     )''')
-    # Use grade_id=NULL if assigned to a subject globally (unlikely) or subject_id=NULL if assigned to a grade (Class Teacher)
 
-    # Marks
     c.execute('''CREATE TABLE IF NOT EXISTS marks (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        student_id INTEGER NOT NULL,
-        subject_id INTEGER NOT NULL,
-        te_score REAL DEFAULT 0,
-        ce_score REAL DEFAULT 0,
-        remarks TEXT,
-        FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE,
-        FOREIGN KEY (subject_id) REFERENCES subjects(id) ON DELETE CASCADE,
-        UNIQUE(student_id, subject_id)
-    )''')
-    
-    # Marks
-    c.execute('''CREATE TABLE IF NOT EXISTS marks (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id SERIAL PRIMARY KEY,
         student_id INTEGER NOT NULL,
         subject_id INTEGER NOT NULL,
         te_score REAL DEFAULT 0,
@@ -118,10 +133,9 @@ def init_db():
     
     try:
         c.execute("ALTER TABLE marks ADD COLUMN remarks TEXT")
-    except sqlite3.OperationalError:
-        pass
+    except psycopg2.Error:
+        conn.rollback()
 
-    # Skills Assessment
     c.execute('''CREATE TABLE IF NOT EXISTS student_skills (
         student_id INTEGER NOT NULL,
         skill_name TEXT NOT NULL,
@@ -130,16 +144,14 @@ def init_db():
         PRIMARY KEY (student_id, skill_name)
     )''')
     
-    # General Remarks (Class Teacher)
     c.execute('''CREATE TABLE IF NOT EXISTS student_remarks (
         student_id INTEGER PRIMARY KEY,
         remark TEXT,
         FOREIGN KEY (student_id) REFERENCES students(id) ON DELETE CASCADE
     )''')
     
-    # Subject-Grade Configuration (Max Marks per Grade)
     c.execute('''CREATE TABLE IF NOT EXISTS subject_grade_config (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id SERIAL PRIMARY KEY,
         subject_id INTEGER NOT NULL,
         grade_id INTEGER NOT NULL,
         te_max_marks REAL DEFAULT 100,
@@ -149,18 +161,11 @@ def init_db():
         UNIQUE(subject_id, grade_id)
     )''')
 
-    # Background Images
     c.execute('''CREATE TABLE IF NOT EXISTS report_backgrounds (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id SERIAL PRIMARY KEY,
         filename TEXT NOT NULL
     )''')
     
-    # Background Assignments (One Grade -> One BG, but BG -> Many Grades)
-    # Actually, a grade should have only ONE background. So `grades` table could have `background_id`.
-    # But user says "next to update image file, add option to assign multiple grades".
-    # So `bg_assignments` table is flexible.
-    # Constraint: A grade should only be in one assignment? Or we select strict mapping.
-    # Let's use a mapping table `grade_backgrounds(grade_id PK, background_id)`.
     c.execute('''CREATE TABLE IF NOT EXISTS grade_backgrounds (
         grade_id INTEGER PRIMARY KEY,
         background_id INTEGER NOT NULL,
@@ -168,7 +173,6 @@ def init_db():
         FOREIGN KEY (background_id) REFERENCES report_backgrounds(id) ON DELETE CASCADE
     )''')
 
-    # Signatures (Global)
     c.execute('''CREATE TABLE IF NOT EXISTS documents (
         key TEXT PRIMARY KEY,
         file_path TEXT
@@ -176,18 +180,18 @@ def init_db():
     
     try:
         c.execute("ALTER TABLE grades ADD COLUMN class_teacher_sign_path TEXT")
-    except sqlite3.OperationalError:
-        pass
+    except psycopg2.Error:
+        conn.rollback()
         
     try:
         c.execute("ALTER TABLE students ADD COLUMN parent_signature_path TEXT")
-    except sqlite3.OperationalError:
-        pass
+    except psycopg2.Error:
+        conn.rollback()
         
     try:
         c.execute("ALTER TABLE grade_scales ADD COLUMN grade_id INTEGER REFERENCES grades(id)")
-    except sqlite3.OperationalError:
-        pass
+    except psycopg2.Error:
+        conn.rollback()
 
     conn.commit()
     conn.close()

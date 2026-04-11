@@ -19,7 +19,7 @@ def app():
     # DETERMINE ACCESSIBLE GRADES
     # Principal -> All Grades
     # Class Teacher -> Assigned Grades (we assumed "Assign Grades" means this)
-    # Teacher -> Probably shouldn't generate official reports, but maybe draft? 
+    # Teacher -> Probably shouldn't generate official reports, but maybe draft%s 
     # Req: "Generate reports... (for class teacher / principal)"
     
     if role == "Principal" or role == "Admin":
@@ -31,9 +31,9 @@ def app():
         SELECT DISTINCT g.id, g.name 
         FROM user_assignments ua
         JOIN grades g ON ua.grade_id = g.id
-        WHERE ua.username = ?
+        WHERE ua.username = %s
         """
-        grades_df = pd.read_sql(q, conn, params=(username,))
+        grades_df = pd.read_sql(q, conn.raw, params=(username,))
     
     if grades_df.empty:
         st.warning("No grades assigned to you for report generation.")
@@ -49,7 +49,7 @@ def app():
     
     # SELECT STUDENTS
     # "Generate reports of all or selected students"
-    st_df = pd.read_sql("SELECT id, name, admission_no FROM students WHERE grade_id=? ORDER BY name", conn, params=(sel_grade_id,))
+    st_df = pd.read_sql("SELECT id, name, admission_no FROM students WHERE grade_id=%s ORDER BY name", conn, params=(sel_grade_id,))
     
     all_students = st.checkbox("Select All Students", value=True)
     if all_students:
@@ -105,9 +105,9 @@ def app():
                     SELECT s.name as subject, m.te_score, m.ce_score, s.te_max_marks, s.ce_max_marks
                     FROM marks m
                     JOIN subjects s ON m.subject_id = s.id
-                    WHERE m.student_id = ?
+                    WHERE m.student_id = %s
                     """
-                    marks_data = pd.read_sql(q_m, conn, params=(sid,))
+                    marks_data = pd.read_sql(q_m, conn.raw, params=(sid,))
                     
                     subjects_scores = []
                     for _, row in marks_data.iterrows():

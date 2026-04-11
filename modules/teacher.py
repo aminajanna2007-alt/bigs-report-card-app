@@ -15,7 +15,7 @@ def app():
     conn = database.get_connection()
     # Get assigned grades and subjects
     # A teacher can enter marks for (Grade, Subject) pairs assigned to them.
-    # Or if Class Teacher, maybe all subjects?
+    # Or if Class Teacher, maybe all subjects%s
     # Req: "Marks entry permission of all or selected students, by selected grades (for teacher role)"
     # We implemented `user_assignments` table.
     
@@ -24,9 +24,9 @@ def app():
     FROM user_assignments ua
     JOIN grades g ON ua.grade_id = g.id
     JOIN subjects s ON ua.subject_id = s.id
-    WHERE ua.username = ?
+    WHERE ua.username = %s
     """
-    assigns = pd.read_sql(q, conn, params=(username,))
+    assigns = pd.read_sql(q, conn.raw, params=(username,))
     
     if assigns.empty:
         st.info("No classes or subjects assigned to you. Please contact Admin.")
@@ -50,7 +50,7 @@ def app():
     # We need to Left Join students with marks for this subject.
     
     # Fetch max marks for validation
-    subj_info = conn.execute("SELECT te_max_marks, ce_max_marks FROM subjects WHERE id=?", (int(sid),)).fetchone()
+    subj_info = conn.execute("SELECT te_max_marks, ce_max_marks FROM subjects WHERE id=%s", (int(sid),)).fetchone()
     te_max, ce_max = subj_info if subj_info else (100, 0)
     
     st.markdown(f"**Entering Marks for {sel_subj} in {sel_grade}** (Max TE: {te_max}, Max CE: {ce_max})")
@@ -58,11 +58,11 @@ def app():
     q_st = """
     SELECT s.id as student_id, s.name, s.admission_no, m.te_score, m.ce_score, m.remarks
     FROM students s
-    LEFT JOIN marks m ON s.id = m.student_id AND m.subject_id = ?
-    WHERE s.grade_id = ?
+    LEFT JOIN marks m ON s.id = m.student_id AND m.subject_id = %s
+    WHERE s.grade_id = %s
     ORDER BY s.name
     """
-    df = pd.read_sql(q_st, conn, params=(int(sid), int(gid)))
+    df = pd.read_sql(q_st, conn.raw, params=(int(sid), int(gid)))
     
     # Data Editor
     edited_df = st.data_editor(
@@ -96,7 +96,7 @@ def app():
             try:
                 c.execute("""
                 INSERT INTO marks (student_id, subject_id, te_score, ce_score, remarks)
-                VALUES (?, ?, ?, ?, ?)
+                VALUES (%s, %s, %s, %s, %s)
                 ON CONFLICT(student_id, subject_id) DO UPDATE SET
                 te_score=excluded.te_score,
                 ce_score=excluded.ce_score,

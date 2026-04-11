@@ -166,3 +166,4 @@ bg_*.jpeg
 report_*.pdf
 report_*.jpg
 report_*.png
+.streamlit/secrets.toml

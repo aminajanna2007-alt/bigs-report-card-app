@@ -7,7 +7,7 @@ def run():
     
     print("GRADES TABLE:")
     try:
-        df_g = pd.read_sql("SELECT * FROM grades", conn)
+        df_g = pd.read_sql("SELECT * FROM grades", conn.raw)
         print(df_g)
     except Exception as e:
         print(e)

@@ -6,13 +6,13 @@ def run():
     
     print("REPORT BACKGROUNDS:")
     try:
-        print(pd.read_sql("SELECT * FROM report_backgrounds", conn))
+        print(pd.read_sql("SELECT * FROM report_backgrounds", conn.raw))
     except Exception as e:
         print(e)
         
     print("\nGRADE BACKGROUNDS (Raw):")
     try:
-        print(pd.read_sql("SELECT * FROM grade_backgrounds", conn))
+        print(pd.read_sql("SELECT * FROM grade_backgrounds", conn.raw))
     except Exception as e:
         print(e)
         
@@ -24,7 +24,7 @@ def run():
             JOIN grades g ON gb.grade_id = g.id
             JOIN report_backgrounds b ON gb.background_id = b.id
         """
-        print(pd.read_sql(q, conn))
+        print(pd.read_sql(q, conn.raw))
     except Exception as e:
         print(e)
 
