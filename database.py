@@ -14,11 +14,8 @@ class PgCursorWrapper:
     def __init__(self, cursor):
         self._cursor = cursor
 
-    def execute(self, query, params=None):
-        if params is not None:
-             self._cursor.execute(query, params)
-        else:
-             self._cursor.execute(query)
+    def execute(self, query, *args, **kwargs):
+        self._cursor.execute(query, *args, **kwargs)
         return self
 
     def fetchone(self):
@@ -37,9 +34,9 @@ class PgConnectionWrapper:
     def cursor(self):
         return PgCursorWrapper(self.conn.cursor())
 
-    def execute(self, query, params=None):
+    def execute(self, query, *args, **kwargs):
         cur = self.cursor()
-        cur.execute(query, params)
+        cur.execute(query, *args, **kwargs)
         return cur
 
     def commit(self):
