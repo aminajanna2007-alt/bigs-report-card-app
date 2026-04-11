@@ -1,4 +1,16 @@
 import psycopg2
+from psycopg2.extensions import register_adapter, adapt
+import numpy as np
+
+def adapt_numpy_int(numpy_int):
+    return adapt(int(numpy_int))
+
+def adapt_numpy_float(numpy_float):
+    return adapt(float(numpy_float))
+
+register_adapter(np.int64, adapt_numpy_int)
+register_adapter(np.float64, adapt_numpy_float)
+
 import os
 import streamlit as st
 try:
