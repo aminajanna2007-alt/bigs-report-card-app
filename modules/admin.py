@@ -60,7 +60,7 @@ def app():
                             gids = grades_list[grades_list['name'].isin(ct_grades)]['id'].tolist()
                             for gid in gids:
                                 try:
-                                    c.execute("INSERT INTO user_assignments (username, grade_id, subject_id) VALUES (%s, %s, %s)", (gen_user, int(gid), -1))
+                                    c.execute("INSERT INTO user_assignments (username, grade_id, subject_id) VALUES (%s, %s, %s)", (gen_user, int(gid), None))
                                 except:
                                     pass
                         
@@ -111,7 +111,7 @@ def app():
             FROM user_assignments ua
             JOIN users u ON ua.username = u.username
             JOIN grades g ON ua.grade_id = g.id
-            WHERE u.role = 'Class Teacher' AND ua.subject_id = -1
+            WHERE u.role = 'Class Teacher' AND ua.subject_id IS NULL
             GROUP BY ua.username, u.full_name
             """
             ct_summary = pd.read_sql(q_ct, conn.raw)
@@ -136,7 +136,7 @@ def app():
                     SELECT g.name 
                     FROM user_assignments ua
                     JOIN grades g ON ua.grade_id = g.id
-                    WHERE ua.username = %s AND ua.subject_id = -1
+                    WHERE ua.username = %s AND ua.subject_id IS NULL
                     """
                     curr_ct_grades = [r[0] for r in conn.execute(q_g, (sel_u,)).fetchall()]
                 
@@ -191,7 +191,7 @@ def app():
                                     # Get IDs involved
                                     # Current IDs in DB (reload to be safe or use what we had if username unchanged)
                                     # Safest is to querying DB for current status of target user
-                                    curr_ids = [r[0] for r in conn.execute("SELECT grade_id FROM user_assignments WHERE username=%s AND subject_id=-1", (sel_u,)).fetchall()]
+                                    curr_ids = [r[0] for r in conn.execute("SELECT grade_id FROM user_assignments WHERE username=%s AND subject_id IS NULL", (sel_u,)).fetchall()]
                                     
                                     new_ids = []
                                     if new_ct_grades:
@@ -202,10 +202,10 @@ def app():
                                     to_remove = set(curr_ids) - set(new_ids)
                                     
                                     for mid in to_remove:
-                                        conn.execute("DELETE FROM user_assignments WHERE username=%s AND grade_id=%s AND subject_id=-1", (sel_u, mid))
+                                        conn.execute("DELETE FROM user_assignments WHERE username=%s AND grade_id=%s AND subject_id IS NULL", (sel_u, mid))
                                         
                                     for Aid in to_add:
-                                        conn.execute("INSERT INTO user_assignments (username, grade_id, subject_id) VALUES (%s, %s, %s)", (sel_u, Aid, -1))
+                                        conn.execute("INSERT INTO user_assignments (username, grade_id, subject_id) VALUES (%s, %s, %s)", (sel_u, Aid, None))
                                 
                                 conn.commit()
                                 st.success("Updated!")
