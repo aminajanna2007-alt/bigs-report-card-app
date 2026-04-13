@@ -329,7 +329,7 @@ def app():
         # Display Configs
         conn = database.get_connection()
         q_conf = """
-            SELECT s.name as Subject, g.name as Grade, c.te_max_marks, c.ce_max_marks 
+            SELECT s.name as "Subject", g.name as "Grade", c.te_max_marks, c.ce_max_marks 
             FROM subject_grade_config c 
             JOIN subjects s ON c.subject_id=s.id 
             JOIN grades g ON c.grade_id=g.id
@@ -344,7 +344,7 @@ def app():
             # Create a unique list for selection
             # We need IDs to delete. Since we don't display composite ID, we fetch full list for mapping.
             q_full = """
-                SELECT c.subject_id, c.grade_id, s.name as Subject, g.name as Grade 
+                SELECT c.subject_id, c.grade_id, s.name as "Subject", g.name as "Grade" 
                 FROM subject_grade_config c 
                 JOIN subjects s ON c.subject_id=s.id 
                 JOIN grades g ON c.grade_id=g.id
@@ -369,7 +369,7 @@ def app():
         st.subheader("Grade Scales (Per Grade)")
         
         conn = database.get_connection()
-        gs_df = pd.read_sql("SELECT gs.grade_label, gs.min_pct, gs.max_pct, g.name as Grade FROM grade_scales gs LEFT JOIN grades g ON gs.grade_id=g.id ORDER BY g.name, gs.min_pct DESC", conn)
+        gs_df = pd.read_sql("SELECT gs.grade_label, gs.min_pct, gs.max_pct, g.name as \"Grade\" FROM grade_scales gs LEFT JOIN grades g ON gs.grade_id=g.id ORDER BY g.name, gs.min_pct DESC", conn)
         conn.close()
         
         with st.form("grade_scale"):
@@ -522,7 +522,7 @@ def app():
         
         # Main Data View
         conn = database.get_connection()
-        st_df = pd.read_sql("SELECT s.id, s.name, s.admission_no, g.name as Grade FROM students s LEFT JOIN grades g ON s.grade_id = g.id ORDER BY g.name, s.name", conn)
+        st_df = pd.read_sql("SELECT s.id, s.name, s.admission_no, g.name as \"Grade\" FROM students s LEFT JOIN grades g ON s.grade_id = g.id ORDER BY g.name, s.name", conn)
         conn.close()
         
         c1, c2 = st.columns([3, 1])
@@ -630,7 +630,7 @@ def app():
                 st.markdown("#### Current Assignments")
                 conn = database.get_connection()
                 q = """
-                SELECT ua.id, ua.username, g.name as Grade, s.name as Subject 
+                SELECT ua.id, ua.username, g.name as "Grade", s.name as "Subject" 
                 FROM user_assignments ua
                 JOIN grades g ON ua.grade_id = g.id
                 JOIN subjects s ON ua.subject_id = s.id
@@ -756,7 +756,7 @@ def app():
             # Show assignments
             conn = database.get_connection()
             q_bg = """
-                SELECT g.name as Grade, b.filename as Background
+                SELECT g.name as "Grade", b.filename as "Background"
                 FROM grade_backgrounds gb
                 JOIN grades g ON gb.grade_id=g.id
                 JOIN report_backgrounds b ON gb.background_id=b.id
