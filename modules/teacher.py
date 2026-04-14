@@ -50,8 +50,12 @@ def app():
     # We need to Left Join students with marks for this subject.
     
     # Fetch max marks for validation
-    subj_info = conn.execute("SELECT te_max_marks, ce_max_marks FROM subjects WHERE id=%s", (int(sid),)).fetchone()
-    te_max, ce_max = subj_info if subj_info else (100, 0)
+    lim_res = conn.execute("SELECT te_max_marks, ce_max_marks FROM subject_grade_config WHERE subject_id=%s AND grade_id=%s", (int(sid), int(gid))).fetchone()
+    if lim_res:
+        te_max, ce_max = lim_res
+    else:
+        subj_info = conn.execute("SELECT te_max_marks, ce_max_marks FROM subjects WHERE id=%s", (int(sid),)).fetchone()
+        te_max, ce_max = subj_info if subj_info else (100.0, 0.0)
     
     st.markdown(f"**Entering Marks for {sel_subj} in {sel_grade}** (Max TE: {te_max}, Max CE: {ce_max})")
     
@@ -71,8 +75,8 @@ def app():
             "student_id": st.column_config.NumberColumn(disabled=True),
             "name": st.column_config.TextColumn(disabled=True),
             "admission_no": st.column_config.TextColumn(disabled=True),
-            "te_score": st.column_config.NumberColumn("TE Score", min_value=0, max_value=te_max, step=1, default=0),
-            "ce_score": st.column_config.NumberColumn("CE Score", min_value=0, max_value=ce_max, step=1, default=0),
+            "te_score": st.column_config.NumberColumn("TE Score", min_value=0.0, max_value=float(te_max), step=0.5, format="%.1f"),
+            "ce_score": st.column_config.NumberColumn("CE Score", min_value=0.0, max_value=float(ce_max), step=0.5, format="%.1f"),
             "remarks": st.column_config.TextColumn("Remarks", width="medium")
         },
         hide_index=True,
