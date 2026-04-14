@@ -68,7 +68,7 @@ def app():
             # 3. Config (Signatures)
             
             # Fetch Grade Scales
-            gs_df = pd.read_sql("SELECT min_pct, max_pct, grade_label, grade_label as comment FROM grade_scales ORDER BY min_pct DESC", conn) # using label as comment placeholder or empty
+            gs_df = pd.read_sql("SELECT min_pct, max_pct, grade_label, grade_label as comment FROM grade_scales WHERE grade_id = %s OR grade_id IS NULL ORDER BY grade_id NULLS LAST, min_pct DESC", conn.raw, params=(sel_grade_id,))
             # Refine grade scale list of dicts
             grade_scales = []
             for _, r in gs_df.iterrows():

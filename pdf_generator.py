@@ -95,10 +95,11 @@ def lookup_grade(pct: float, grade_scale_rows: List[dict]) -> str:
     for g in grade_scale_rows:
         # Support headers having either Min%/Max% or Min/Max
         try:
-            mn = safe_float(g.get("Min%", g.get("Min", 0)))
-            mx = safe_float(g.get("Max%", g.get("Max", 100)))
+            mn = safe_float(g.get("Min%", g.get("Min", g.get("min_pct", 0))))
+            mx = safe_float(g.get("Max%", g.get("Max", g.get("max_pct", 100))))
             if mn <= pct <= mx:
-                return (g.get("Grade", "") or g.get("Score", "")).strip()
+                grade_val = g.get("Grade") or g.get("grade_label") or g.get("Score") or ""
+                return str(grade_val).strip()
         except Exception:
             continue
     return ""

@@ -116,6 +116,13 @@ def app():
                 rem_rec = conn.execute("SELECT remark FROM student_remarks WHERE student_id=%s", (sid,)).fetchone()
                 remark = rem_rec[0] if rem_rec else ""
                 
+                # Filter grade scales for this specific grade
+                filtered_grade_scales = [g for g in grade_scales if g.get('grade_id') == gid or g.get('grade_id') is None]
+                filtered_grade_scales.sort(key=lambda x: (
+                    0 if x.get('grade_id') == gid else 1,
+                    -float(x.get('min_pct', 0) if x.get('min_pct') is not None else 0)
+                ))
+
                 pdf_bytes = pdf_generator.create_report_card_bytes(
                     student_name=sname,
                     student_grade=gname,
@@ -125,7 +132,7 @@ def app():
                     prepared_by="Principal",
                     header_img_path=top_img,
                     footer_img_path=bottom_img,
-                    grade_scales=grade_scales,
+                    grade_scales=filtered_grade_scales,
                     principal_sign_path=p_sign,
                     parent_sign_path=par_sign,
                     class_teacher_sign_path=ct_sign

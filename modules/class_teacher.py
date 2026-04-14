@@ -282,7 +282,7 @@ def app():
                         # We use BG image now, but keep header fallback if needed in adapter%s 
                         # Adapter handles fallback to frame if bg_img is None.
                         
-                        gs = pd.read_sql("SELECT * FROM grade_scales", conn.raw)
+                        gs = pd.read_sql("SELECT * FROM grade_scales WHERE grade_id = %s OR grade_id IS NULL ORDER BY grade_id NULLS LAST, min_pct DESC", conn.raw, params=(grade_id,))
                         grade_scales = gs.to_dict('records')
                         
                         zip_buffer = io.BytesIO()
