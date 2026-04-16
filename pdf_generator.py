@@ -80,7 +80,11 @@ def write_csv(path: Path, fieldnames: List[str], rows: List[dict]):
 
 def safe_float(x, default=0.0):
     try:
-        return float(x)
+        val = float(x)
+        # NaN != NaN is True — guard against NaN which would crash int()
+        if val != val:
+            return default
+        return val
     except Exception:
         return default
 
@@ -519,8 +523,8 @@ def create_report_card_bytes(
         
         mapped_acad.append({
             "Subject": subj,
-            "TE": te,
-            "CE": ce,
+            "TE": safe_float(te, 0.0),       # Guard: NaN/None → 0.0
+            "CE": safe_float(ce, 0.0),       # Guard: NaN/None → 0.0
             "Full_Marks": full,
             "Remarks": remarks
         })
